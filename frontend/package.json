@@ -1,0 +1,27 @@
+{
+  "name": "msx",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "vue": "^3.5.25",
+    "vue-router": "^4.6.3",
+    "@pinia/nuxt": "^0.11.3",
+    "pinia": "^3.0.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/deno": "^2.5.0",
+    "@types/node": "^24.2.0",
+    "nuxt": "^4.2.1",
+    "ofetch": "^1.5.1",
+    "tailwindcss": "^4.1.17",
+    "autoprefixer": "^10.4.14"
+  }
+}

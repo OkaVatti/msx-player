@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "read": true,
+    "write": true,
+    "net": true,
+    "env": true
+  },
+  "tasks": {
+    "dev": "nuxt dev --host localhost --port 3000",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "clean": "deno run --allow-write --allow-read npm:@nuxt/kit@latest nuxi clean"
+  },
+  "compilerOptions": {
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "types": ["@nuxt/types", "vite/client"]
+  },
+  "imports": {
+    "~/": "./",
+    "@/": "./",
+    "~~/": "./",
+    "@@/": "./"
+  }
+}
