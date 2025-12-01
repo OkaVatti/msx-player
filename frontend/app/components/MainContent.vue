@@ -68,10 +68,10 @@ const viewMode = ref<'list' | 'grid'>('list')
 // Async components for better performance
 const LibraryView = defineAsyncComponent(() => import('~/views/LibraryView.vue'))
 const SearchView = defineAsyncComponent(() => import('~/views/SearchView.vue'))
-const PlaylistsView = defineAsyncComponent(() => import('../views/PlaylistsView.vue'))
+const PlaylistsView = defineAsyncComponent(() => import('~//views/PlaylistsView.vue'))
 const UploadView = defineAsyncComponent(() => import('~/views/UploadView.vue'))
 const ManageView = defineAsyncComponent(() => import('~/views/ManageView.vue'))
-const VisualizerView = defineAsyncComponent(() => import('~/views/VisualizerView.vue'))
+const VisualizerView = defineAsyncComponent(() => import('~//views/VisualizerView.vue'))
 const ControlsView = defineAsyncComponent(() => import('~/views/ControlsView.vue'))
 
 const viewTitle = computed(() => {

@@ -52,8 +52,8 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 
-const canvas = ref<HTMLCanvasElement>();
-const ctx = ref<CanvasRenderingContext2D>();
+const canvas = ref<HTMLCanvasElement | null>(null);
+const ctx = ref<CanvasRenderingContext2D | null>(null);
 const isDragging = ref(false);
 const rotation = ref({ x: 0, y: 0 });
 const scale = ref(1);
@@ -62,26 +62,57 @@ const fps = ref(0);
 
 const visualizerModes: Array<'bars' | 'wave' | 'particles' | 'circular'> = ['bars', 'wave', 'particles', 'circular'];
 
-let animationFrame: number;
-let audioContext: AudioContext;
-let analyser: AnalyserNode;
-let dataArray: Uint8Array<ArrayBuffer>;
+let animationFrame = 0;
+let audioContext: AudioContext | null = null;
+let analyser: AnalyserNode | null = null;
+let dataArray: Uint8Array | null = null; // <--- plain Uint8Array | null
 let lastFrameTime = 0;
 let frameCount = 0;
+let lastMousePos = { x: 0, y: 0 };
 
-const setupAudioContext = () => {
+const setupAudioContext = async () => {
   if (!audioContext) {
-    audioContext = new AudioContext();
+    // create audio context with backwards compatibility
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     analyser = audioContext.createAnalyser();
     analyser.fftSize = 256;
-    dataArray = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
+    // create a concrete Uint8Array backed by an ArrayBuffer
+    dataArray = new Uint8Array(analyser.frequencyBinCount);
+    // ensure the context is running (some browsers start suspended)
+    try { await audioContext.resume(); } catch {}
+  }
+};
+
+// safe connect function — call with an audio element (from your app)
+const connectAudioElement = (element: HTMLAudioElement | null) => {
+  if (!element) return;
+  if (!audioContext || !analyser || !dataArray) {
+    // ensure audio context + analyser exist
+    setupAudioContext().catch(() => {});
+  }
+  if (!audioContext || !analyser || !dataArray) return;
+
+  try {
+    // createMediaElementSource may throw if element was already connected previously
+    const src = audioContext.createMediaElementSource(element);
+    src.connect(analyser);
+    analyser.connect(audioContext.destination);
+    // resume if suspended
+    if (audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {});
+    }
+  } catch (err) {
+    // connecting the same element twice can throw — non-fatal
+    console.warn('connectAudioElement warning:', err);
   }
 };
 
 const draw = (timestamp: number) => {
-  if (!canvas.value || !ctx.value) return;
+  const cvs = canvas.value;
+  const c = ctx.value;
+  if (!cvs || !c) return;
 
-  // Calculate FPS
+  // FPS
   frameCount++;
   if (timestamp - lastFrameTime >= 1000) {
     fps.value = frameCount;
@@ -89,45 +120,58 @@ const draw = (timestamp: number) => {
     lastFrameTime = timestamp;
   }
 
-  const width = canvas.value.width;
-  const height = canvas.value.height;
+  const width = cvs.width;
+  const height = cvs.height;
 
-  // Clear with scan line effect
-  ctx.value.fillStyle = 'rgba(0, 0, 0, 0.1)';
-  ctx.value.fillRect(0, 0, width, height);
+  // Clear with fade
+  c.fillStyle = 'rgba(0, 0, 0, 0.1)';
+  c.fillRect(0, 0, width, height);
 
-  // Apply transformations
-  ctx.value.save();
-  ctx.value.translate(width / 2, height / 2);
-  ctx.value.rotate(rotation.value.x * Math.PI / 180);
-  ctx.value.scale(scale.value, scale.value);
-  ctx.value.translate(-width / 2, -height / 2);
+  // Transform
+  c.save();
+  c.translate(width / 2, height / 2);
+  c.rotate(rotation.value.x * Math.PI / 180);
+  c.scale(scale.value, scale.value);
+  c.translate(-width / 2, -height / 2);
 
+  // obtain audio data: if analyser + dataArray present use it, otherwise generate deterministic synthetic data
   if (analyser && dataArray) {
+    // ensure the AudioContext isn't suspended
+    if (audioContext && audioContext.state === 'suspended') {
+      audioContext.resume().catch(() => {});
+    }
+    // fill the dataArray with real analyser values
     analyser.getByteFrequencyData(dataArray);
   } else {
-    // Generate fake data for demo
-    for (let i = 0; i < 128; i++) {
-      dataArray[i] = Math.random() * 255 * Math.sin(timestamp / 1000 + i / 10);
+    // fallback: create or reuse a concrete Uint8Array and fill it with deterministic waveform-like values
+    if (!dataArray) dataArray = new Uint8Array(128);
+    for (let i = 0; i < dataArray.length; i++) {
+      // produce a smooth pseudo-wave for demo visuals
+      const value = (Math.sin(timestamp / 1000 + i / 10) * 0.5 + 0.5) * 255;
+      dataArray[i] = Math.max(0, Math.min(255, Math.floor(value)));
     }
   }
 
+  // Draw selected mode. Cast to non-null since we always ensure dataArray exists above.
+  const audioData = dataArray as Uint8Array;
+
   switch (currentMode.value) {
     case 'bars':
-      drawBars(ctx.value, width, height, dataArray);
+      drawBars(c, width, height, audioData);
       break;
     case 'wave':
-      drawWave(ctx.value, width, height, dataArray);
+      drawWave(c, width, height, audioData);
       break;
     case 'particles':
-      drawParticles(ctx.value, width, height, dataArray, timestamp);
+      drawParticles(c, width, height, audioData, timestamp);
       break;
     case 'circular':
-      drawCircular(ctx.value, width, height, dataArray);
+      drawCircular(c, width, height, audioData);
       break;
   }
 
-  ctx.value.restore();
+  c.restore();
+
   animationFrame = requestAnimationFrame(draw);
 };
 
@@ -137,18 +181,16 @@ const drawBars = (ctx: CanvasRenderingContext2D, width: number, height: number, 
 
   for (let i = 0; i < data.length; i++) {
     const barHeight = ((data?.[i] ?? 0) / 255) * height;
-    
-    // Retro green gradient
+
     ctx.strokeStyle = '#84cc16';
     ctx.fillStyle = '#84cc16';
     ctx.globalAlpha = 0.8;
-    
+
     ctx.fillRect(x, height - barHeight, barWidth - 1, barHeight);
-    
-    // Top highlight
+
     ctx.fillStyle = '#a3e635';
     ctx.fillRect(x, height - barHeight, barWidth - 1, 2);
-    
+
     x += barWidth;
   }
   ctx.globalAlpha = 1;
@@ -158,7 +200,7 @@ const drawWave = (ctx: CanvasRenderingContext2D, width: number, height: number, 
   ctx.beginPath();
   ctx.lineWidth = 3;
   ctx.strokeStyle = '#84cc16';
-  
+
   const sliceWidth = width / data.length;
   let x = 0;
 
@@ -166,18 +208,12 @@ const drawWave = (ctx: CanvasRenderingContext2D, width: number, height: number, 
     const v = (data?.[i] ?? 0) / 255;
     const y = v * height;
 
-    if (i === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
 
     x += sliceWidth;
   }
-
   ctx.stroke();
-  
-  // Shadow effect
+
   ctx.strokeStyle = '#65a30d';
   ctx.globalAlpha = 0.3;
   ctx.lineWidth = 6;
@@ -189,23 +225,21 @@ const drawParticles = (ctx: CanvasRenderingContext2D, width: number, height: num
   const centerX = width / 2;
   const centerY = height / 2;
 
-  for (let i = 0; i < data.length; i++) {
+  for (let i = 0; i < data.length; i += Math.max(1, Math.floor(data.length / 40))) {
     const amplitude = (data?.[i] ?? 0) / 255;
     const angle = (i / data.length) * Math.PI * 2 + timestamp / 1000;
     const radius = 50 + amplitude * 150;
-    
+
     const x = centerX + Math.cos(angle) * radius;
     const y = centerY + Math.sin(angle) * radius;
-    
+
     const size = 2 + amplitude * 6;
-    
-    // Draw particle with glow
+
     ctx.beginPath();
     ctx.arc(x, y, size, 0, Math.PI * 2);
     ctx.fillStyle = '#84cc16';
     ctx.fill();
-    
-    // Glow
+
     ctx.globalAlpha = 0.3;
     ctx.beginPath();
     ctx.arc(x, y, size * 2, 0, Math.PI * 2);
@@ -220,31 +254,25 @@ const drawCircular = (ctx: CanvasRenderingContext2D, width: number, height: numb
   const centerY = height / 2;
   const radius = Math.min(width, height) / 4;
 
-  // Base circle
   ctx.beginPath();
   ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
   ctx.strokeStyle = '#374151';
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  // Frequency circle(
   ctx.beginPath();
   for (let i = 0; i < data.length; i++) {
     const amplitude = (data?.[i] ?? 0) / 255;
     const angle = (i / data.length) * Math.PI * 2;
     const pointRadius = radius + amplitude * 100;
-    
+
     const x = centerX + Math.cos(angle) * pointRadius;
     const y = centerY + Math.sin(angle) * pointRadius;
-    
-    if (i === 0) {
-      ctx.moveTo(x, y);
-    } else {
-      ctx.lineTo(x, y);
-    }
+
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
   }
   ctx.closePath();
-  
+
   ctx.fillStyle = 'rgba(132, 204, 22, 0.3)';
   ctx.fill();
   ctx.strokeStyle = '#84cc16';
@@ -254,18 +282,16 @@ const drawCircular = (ctx: CanvasRenderingContext2D, width: number, height: numb
 
 const startDrag = (event: MouseEvent) => {
   isDragging.value = true;
+  lastMousePos = { x: event.clientX, y: event.clientY };
 };
 
 const drag = (event: MouseEvent) => {
   if (!isDragging.value) return;
-  
   rotation.value.x += event.movementY * 0.5;
   rotation.value.y += event.movementX * 0.5;
 };
 
-const stopDrag = () => {
-  isDragging.value = false;
-};
+const stopDrag = () => { isDragging.value = false; };
 
 const handleWheel = (event: WheelEvent) => {
   event.preventDefault();
@@ -274,22 +300,22 @@ const handleWheel = (event: WheelEvent) => {
 };
 
 onMounted(() => {
-  if (canvas.value) {
-    canvas.value.width = canvas.value.offsetWidth;
-    canvas.value.height = 500;
-    ctx.value = canvas.value.getContext('2d')!;
-    
-    setupAudioContext();
-    draw(0);
-  }
+  if (!canvas.value) return;
+  const rect = canvas.value.getBoundingClientRect();
+  canvas.value.width = rect.width;
+  canvas.value.height = 500;
+  ctx.value = canvas.value.getContext('2d')!;
+  // create audio context asap (optional)
+  setupAudioContext().catch(() => {});
+  animationFrame = requestAnimationFrame(draw);
 });
 
 onUnmounted(() => {
-  if (animationFrame) {
-    cancelAnimationFrame(animationFrame);
-  }
-  if (audioContext) {
-    audioContext.close();
-  }
+  if (animationFrame) cancelAnimationFrame(animationFrame);
+  if (audioContext) audioContext.close().catch(() => {});
 });
 </script>
+
+<style scoped>
+/* keep existing styles */
+</style>

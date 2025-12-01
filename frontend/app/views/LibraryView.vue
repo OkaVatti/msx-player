@@ -153,7 +153,7 @@
         @dblclick="queueSong(song)"
       >
         <!-- Album Art -->
-        <div class="relative aspect-square bg-gradient-to-br from-[#5a548d] to-[#837dbd]">
+        <div class="relative aspect-square bg-linear-to-br from-[#5a548d] to-[#837dbd]">
           <div class="absolute inset-0 flex items-center justify-center">
             <span class="text-6xl text-black/50">♪</span>
           </div>
@@ -242,7 +242,7 @@
         
         <!-- Title -->
         <div class="col-span-4 flex items-center gap-3">
-          <div class="w-10 h-10 bg-gradient-to-br from-[#5a548d] to-[#837dbd] flex items-center justify-center flex-shrink-0">
+          <div class="w-10 h-10 bg-linear-to-br from-[#5a548d] to-[#837dbd] flex items-center justify-center flex-shrink-10">
             <span class="text-lg">♪</span>
           </div>
           <div class="flex-1 min-w-0">

@@ -1,5 +1,3 @@
-[file name]: VisualizerView.vue
-[file content begin]
 <template>
   <div class="h-full flex flex-col p-4 space-y-4">
     <!-- Header -->
@@ -167,431 +165,472 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from "vue";
 
 interface Song {
-  id: number
-  title: string
-  artist: string
-  duration: number
-  file_path: string
+  id: number;
+  title: string;
+  artist: string;
+  duration: number;
+  file_path: string;
 }
 
-const canvas = ref<HTMLCanvasElement>()
-const ctx = ref<CanvasRenderingContext2D>()
-const isDragging = ref(false)
-const rotation = ref({ x: 0, y: 0 })
-const scale = ref(1)
-const currentMode = ref<'bars' | 'wave' | 'particles' | 'circular' | 'matrix'>('bars')
-const fps = ref(0)
-const isRunning = ref(true)
-const isConnected = ref(false)
-const audioLevel = ref(0)
-const currentSong = ref<Song | null>(null)
-const currentTime = ref(0)
+const canvas = ref<HTMLCanvasElement | null>(null);
+const ctx = ref<CanvasRenderingContext2D | null>(null);
+const isDragging = ref(false);
+const rotation = ref({ x: 0, y: 0 });
+const scale = ref(1);
+const currentMode = ref<
+  "bars" | "wave" | "particles" | "circular" | "matrix"
+>("bars");
+const fps = ref(0);
+const isRunning = ref(true);
+const isConnected = ref(false);
+const audioLevel = ref(0);
+const currentSong = ref<Song | null>(null);
+const currentTime = ref(0);
 
-const visualizerModes: typeof currentMode.value[] = ['bars', 'wave', 'particles', 'circular', 'matrix']
+const visualizerModes: typeof currentMode.value[] = [
+  "bars",
+  "wave",
+  "particles",
+  "circular",
+  "matrix",
+];
 
-let animationFrame: number
-let audioContext: AudioContext | null = null
-let analyser: AnalyserNode | null = null
-let dataArray: Uint8Array | null = null
-let lastFrameTime = 0
-let frameCount = 0
-let sourceNode: MediaElementAudioSourceNode | null = null
-let audioElement: HTMLAudioElement | null = null
-let lastMousePos = { x: 0, y: 0 }
+let animationFrame = 0;
+let audioContext: AudioContext | null = null;
+let analyser: AnalyserNode | null = null;
+// concrete Uint8Array (backed by an ArrayBuffer)
+let dataArray: Uint8Array | null = null;
+let lastFrameTime = 0;
+let frameCount = 0;
+let sourceNode: MediaElementAudioSourceNode | null = null;
+let audioElement: HTMLAudioElement | null = null;
+let lastMousePos = { x: 0, y: 0 };
 
-const setupAudioContext = () => {
+const setupAudioContext = async () => {
   if (!audioContext) {
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-    analyser = audioContext.createAnalyser()
-    analyser.fftSize = 256
-    dataArray = new Uint8Array(analyser.frequencyBinCount)
+    audioContext =
+      new (window.AudioContext || (window as any).webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 256;
+    // <-- allocate explicit ArrayBuffer so TypeScript knows the backing buffer is ArrayBuffer
+    dataArray = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
+    // resume to satisfy browsers that require user gesture
+    await audioContext.resume().catch(() => {});
   }
-}
+};
 
-const connectToCurrentAudio = () => {
-  // Try to find the audio element from the player
-  const audioEl = document.querySelector('audio') as HTMLAudioElement
+const connectToCurrentAudio = async () => {
+  const audioEl = (document.querySelector("audio") as HTMLAudioElement) || null;
   if (!audioEl) {
-    alert('No audio element found. Please play a song first.')
-    return
+    alert("No audio element found. Please play a song first.");
+    return;
   }
 
-  setupAudioContext()
-  
+  await setupAudioContext();
+
   if (audioContext && analyser) {
-    sourceNode = audioContext.createMediaElementSource(audioEl)
-    sourceNode.connect(analyser)
-    analyser.connect(audioContext.destination)
-    isConnected.value = true
-    audioElement = audioEl
-    
-    // Listen for time updates
-    audioEl.addEventListener('timeupdate', updateCurrentTime)
-    
-    // Get current song info from store or API
-    fetchCurrentSong()
+    try {
+      // createMediaElementSource throws if called twice for same element
+      sourceNode = audioContext.createMediaElementSource(audioEl);
+      sourceNode.connect(analyser);
+      // connect analyser to destination (optional)
+      analyser.connect(audioContext.destination);
+    } catch (err) {
+      console.warn("createMediaElementSource/connect failed:", err);
+    }
+
+    isConnected.value = true;
+    audioElement = audioEl;
+
+    audioEl.addEventListener("timeupdate", updateCurrentTime);
+    await fetchCurrentSong();
   }
-}
+};
 
 const disconnectAudio = () => {
   if (sourceNode) {
-    sourceNode.disconnect()
-    sourceNode = null
+    try {
+      sourceNode.disconnect();
+    } catch {}
+    sourceNode = null;
   }
-  
+
   if (audioElement) {
-    audioElement.removeEventListener('timeupdate', updateCurrentTime)
-    audioElement = null
+    audioElement.removeEventListener("timeupdate", updateCurrentTime);
+    audioElement = null;
   }
-  
-  isConnected.value = false
-  currentSong.value = null
-  currentTime.value = 0
-}
+
+  isConnected.value = false;
+  currentSong.value = null;
+  currentTime.value = 0;
+};
 
 const fetchCurrentSong = async () => {
   try {
-    const response = await fetch('http://localhost:1323/api/player/state')
-    if (!response.ok) throw new Error('Failed to fetch player state')
-    
-    const state = await response.json()
+    const response = await fetch("http://localhost:1323/api/player/state");
+    if (!response.ok) throw new Error("Failed to fetch player state");
+
+    const state = await response.json();
     if (state.current_song) {
-      currentSong.value = state.current_song
-      currentTime.value = state.current_time
+      currentSong.value = state.current_song;
+      currentTime.value = state.current_time;
     }
   } catch (err) {
-    console.error('Error fetching current song:', err)
+    console.error("Error fetching current song:", err);
   }
-}
+};
 
 const updateCurrentTime = () => {
   if (audioElement) {
-    currentTime.value = audioElement.currentTime
+    currentTime.value = audioElement.currentTime;
   }
-}
+};
 
 const formatTime = (seconds: number) => {
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.floor(seconds % 60)
-  return `${mins}:${secs.toString().padStart(2, '0')}`
-}
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
 
 const draw = (timestamp: number) => {
-  if (!canvas.value || !ctx.value) return
+  if (!canvas.value) return;
+
+  if (!ctx.value) ctx.value = canvas.value.getContext("2d");
+
+  if (!ctx.value) return;
 
   // Calculate FPS
-  frameCount++
+  frameCount++;
   if (timestamp - lastFrameTime >= 1000) {
-    fps.value = frameCount
-    frameCount = 0
-    lastFrameTime = timestamp
+    fps.value = frameCount;
+    frameCount = 0;
+    lastFrameTime = timestamp;
   }
 
-  const width = canvas.value.width
-  const height = canvas.value.height
+  const width = canvas.value.width;
+  const height = canvas.value.height;
 
   // Clear with fade effect
-  ctx.value.fillStyle = 'rgba(0, 0, 0, 0.1)'
-  ctx.value.fillRect(0, 0, width, height)
+  ctx.value.fillStyle = "rgba(0, 0, 0, 0.1)";
+  ctx.value.fillRect(0, 0, width, height);
 
   // Apply transformations
-  ctx.value.save()
-  ctx.value.translate(width / 2, height / 2)
-  ctx.value.rotate(rotation.value.x * Math.PI / 180)
-  ctx.value.scale(scale.value, scale.value)
-  ctx.value.translate(-width / 2, -height / 2)
+  ctx.value.save();
+  ctx.value.translate(width / 2, height / 2);
+  ctx.value.rotate((rotation.value.x * Math.PI) / 180);
+  ctx.value.scale(scale.value, scale.value);
+  ctx.value.translate(-width / 2, -height / 2);
 
-  // Get audio data
-  let audioData = dataArray
+  // Get audio data (guarantee a concrete Uint8Array backed by ArrayBuffer)
+  let audioData: Uint8Array = dataArray ?? new Uint8Array(new ArrayBuffer(128));
+
   if (analyser && audioData) {
-    analyser.getByteFrequencyData(audioData)
-    
-    // Calculate average audio level
-    let sum = 0
-    for (let i = 0; i < audioData.length; i++) {
-      sum += audioData[i]
+    // Create a Uint8Array backed by a true ArrayBuffer so TS accepts it.
+    // If audioData.buffer is already an ArrayBuffer this is cheap (shares the same memory),
+    // otherwise we create a view over the buffer cast (TS typing fix).
+    const safeArray = new Uint8Array(
+      // cast to ArrayBuffer for TS; at runtime this is the same underlying buffer we created earlier
+      audioData.buffer as ArrayBuffer,
+      audioData.byteOffset,
+      audioData.length
+    );
+
+    // pass the safeArray (ArrayBuffer-backed) to the analyser
+    analyser.getByteFrequencyData(safeArray);
+
+    // now use safeArray for calculations
+    let sum = 0;
+    for (let i = 0; i < safeArray.length; i++) {
+      sum += safeArray[i];
     }
-    audioLevel.value = sum / audioData.length
+    audioLevel.value = sum / safeArray.length;
   } else {
-    // Generate demo data
-    if (!audioData) {
-      audioData = new Uint8Array(128)
-    }
+    // Generate demo data (concrete ArrayBuffer-backed Uint8Array)
+    audioData = new Uint8Array(new ArrayBuffer(128));
     for (let i = 0; i < audioData.length; i++) {
-      audioData[i] = Math.random() * 255 * Math.sin(timestamp / 1000 + i / 10)
+      const v = Math.abs(Math.sin(timestamp / 1000 + i / 10)) * 255;
+      audioData[i] = Math.floor(v);
     }
-    audioLevel.value = Math.random() * 255
+    audioLevel.value = Math.random() * 255;
   }
+
 
   // Draw based on current mode
   if (audioData) {
     switch (currentMode.value) {
-      case 'bars':
-        drawBars(ctx.value, width, height, audioData)
-        break
-      case 'wave':
-        drawWave(ctx.value, width, height, audioData)
-        break
-      case 'particles':
-        drawParticles(ctx.value, width, height, audioData, timestamp)
-        break
-      case 'circular':
-        drawCircular(ctx.value, width, height, audioData)
-        break
-      case 'matrix':
-        drawMatrix(ctx.value, width, height, timestamp)
-        break
+      case "bars":
+        drawBars(ctx.value, width, height, audioData);
+        break;
+      case "wave":
+        drawWave(ctx.value, width, height, audioData);
+        break;
+      case "particles":
+        drawParticles(ctx.value, width, height, audioData, timestamp);
+        break;
+      case "circular":
+        drawCircular(ctx.value, width, height, audioData);
+        break;
+      case "matrix":
+        drawMatrix(ctx.value, width, height, timestamp);
+        break;
     }
   }
 
-  ctx.value.restore()
-  
+  ctx.value.restore();
+
   if (isRunning.value) {
-    animationFrame = requestAnimationFrame(draw)
+    animationFrame = requestAnimationFrame(draw);
   }
-}
+};
 
-const drawBars = (ctx: CanvasRenderingContext2D, width: number, height: number, data: Uint8Array) => {
-  const barCount = 32
-  const barWidth = width / barCount
-  
+// helper draw functions (same as before)...
+const drawBars = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  data: Uint8Array
+) => {
+  const barCount = 32;
+  const barWidth = width / barCount;
+
   for (let i = 0; i < barCount; i++) {
-    const dataIndex = Math.floor((i / barCount) * data.length)
-    const amplitude = data[dataIndex] / 255
-    const barHeight = amplitude * height * 0.8
-    
-    const x = i * barWidth
-    const y = height - barHeight
-    
-    // Gradient from purple to cyan
-    const gradient = ctx.createLinearGradient(x, y, x, y + barHeight)
-    gradient.addColorStop(0, '#d3ceff')
-    gradient.addColorStop(0.5, '#837dbd')
-    gradient.addColorStop(1, '#5a548d')
-    
-    ctx.fillStyle = gradient
-    ctx.fillRect(x + 1, y, barWidth - 2, barHeight)
-    
-    // Top highlight
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'
-    ctx.fillRect(x + 1, y, barWidth - 2, 1)
-  }
-}
+    const dataIndex = Math.floor((i / barCount) * data.length);
+    const amplitude = data[dataIndex] / 255;
+    const barHeight = amplitude * height * 0.8;
 
-const drawWave = (ctx: CanvasRenderingContext2D, width: number, height: number, data: Uint8Array) => {
-  ctx.beginPath()
-  ctx.lineWidth = 2
-  ctx.strokeStyle = '#d3ceff'
-  
-  const sliceWidth = width / data.length
-  let x = 0
+    const x = i * barWidth;
+    const y = height - barHeight;
+
+    const gradient = ctx.createLinearGradient(x, y, x, y + barHeight);
+    gradient.addColorStop(0, "#d3ceff");
+    gradient.addColorStop(0.5, "#837dbd");
+    gradient.addColorStop(1, "#5a548d");
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x + 1, y, barWidth - 2, barHeight);
+
+    ctx.fillStyle = "rgba(255, 255, 255, 0.3)";
+    ctx.fillRect(x + 1, y, barWidth - 2, 1);
+  }
+};
+
+const drawWave = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  data: Uint8Array
+) => {
+  ctx.beginPath();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#d3ceff";
+
+  const sliceWidth = width / data.length;
+  let x = 0;
 
   for (let i = 0; i < data.length; i++) {
-    const v = data[i] / 255
-    const y = v * height / 2 + height / 4
+    const v = data[i] / 255;
+    const y = v * height / 2 + height / 4;
 
     if (i === 0) {
-      ctx.moveTo(x, y)
+      ctx.moveTo(x, y);
     } else {
-      ctx.lineTo(x, y)
+      ctx.lineTo(x, y);
     }
 
-    x += sliceWidth
+    x += sliceWidth;
   }
 
-  ctx.stroke()
-  
-  // Glow effect
-  ctx.strokeStyle = 'rgba(131, 125, 189, 0.4)'
-  ctx.lineWidth = 4
-  ctx.stroke()
-}
+  ctx.stroke();
 
-const drawParticles = (ctx: CanvasRenderingContext2D, width: number, height: number, data: Uint8Array, timestamp: number) => {
-  const centerX = width / 2
-  const centerY = height / 2
-  const time = timestamp / 1000
+  ctx.strokeStyle = "rgba(131, 125, 189, 0.4)";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+};
+
+const drawParticles = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  data: Uint8Array,
+  timestamp: number
+) => {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const time = timestamp / 1000;
 
   for (let i = 0; i < 50; i++) {
-    const dataIndex = i % data.length
-    const amplitude = data[dataIndex] / 255
-    const angle = (i / 50) * Math.PI * 2 + time
-    const radius = 50 + amplitude * 200
-    
-    const x = centerX + Math.cos(angle) * radius
-    const y = centerY + Math.sin(angle) * radius
-    
-    const size = 1 + amplitude * 4
-    
-    // Particle
-    ctx.beginPath()
-    ctx.arc(x, y, size, 0, Math.PI * 2)
-    ctx.fillStyle = `hsl(${i * 7.2}, 100%, 70%)`
-    ctx.fill()
-    
-    // Trail
-    ctx.globalAlpha = 0.3
-    ctx.beginPath()
-    ctx.arc(x, y, size * 2, 0, Math.PI * 2)
-    ctx.fillStyle = '#837dbd'
-    ctx.fill()
-    ctx.globalAlpha = 1
+    const dataIndex = i % data.length;
+    const amplitude = data[dataIndex] / 255;
+    const angle = (i / 50) * Math.PI * 2 + time;
+    const radius = 50 + amplitude * 200;
+
+    const x = centerX + Math.cos(angle) * radius;
+    const y = centerY + Math.sin(angle) * radius;
+
+    const size = 1 + amplitude * 4;
+
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fillStyle = `hsl(${i * 7.2}, 100%, 70%)`;
+    ctx.fill();
+
+    ctx.globalAlpha = 0.3;
+    ctx.beginPath();
+    ctx.arc(x, y, size * 2, 0, Math.PI * 2);
+    ctx.fillStyle = "#837dbd";
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
-}
+};
 
-const drawCircular = (ctx: CanvasRenderingContext2D, width: number, height: number, data: Uint8Array) => {
-  const centerX = width / 2
-  const centerY = height / 2
-  const baseRadius = Math.min(width, height) / 4
+const drawCircular = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  data: Uint8Array
+) => {
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const baseRadius = Math.min(width, height) / 4;
 
-  // Base circle
-  ctx.beginPath()
-  ctx.arc(centerX, centerY, baseRadius, 0, Math.PI * 2)
-  ctx.strokeStyle = '#5a548d'
-  ctx.lineWidth = 1
-  ctx.stroke()
+  ctx.beginPath();
+  ctx.arc(centerX, centerY, baseRadius, 0, Math.PI * 2);
+  ctx.strokeStyle = "#5a548d";
+  ctx.lineWidth = 1;
+  ctx.stroke();
 
-  // Frequency response
-  ctx.beginPath()
+  ctx.beginPath();
   for (let i = 0; i < data.length; i++) {
-    const amplitude = data[i] / 255
-    const angle = (i / data.length) * Math.PI * 2
-    const radius = baseRadius + amplitude * baseRadius
-    
-    const x = centerX + Math.cos(angle) * radius
-    const y = centerY + Math.sin(angle) * radius
-    
-    if (i === 0) {
-      ctx.moveTo(x, y)
-    } else {
-      ctx.lineTo(x, y)
-    }
-  }
-  ctx.closePath()
-  
-  ctx.fillStyle = 'rgba(131, 125, 189, 0.2)'
-  ctx.fill()
-  ctx.strokeStyle = '#d3ceff'
-  ctx.lineWidth = 1
-  ctx.stroke()
-}
+    const amplitude = data[i] / 255;
+    const angle = (i / data.length) * Math.PI * 2;
+    const radius = baseRadius + amplitude * baseRadius;
 
-const drawMatrix = (ctx: CanvasRenderingContext2D, width: number, height: number, timestamp: number) => {
-  const fontSize = 12
-  const columns = Math.floor(width / fontSize)
-  
-  // Initialize drops if needed
+    const x = centerX + Math.cos(angle) * radius;
+    const y = centerY + Math.sin(angle) * radius;
+
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+
+  ctx.fillStyle = "rgba(131, 125, 189, 0.2)";
+  ctx.fill();
+  ctx.strokeStyle = "#d3ceff";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+};
+
+const drawMatrix = (
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  timestamp: number
+) => {
+  const fontSize = 12;
+  const columns = Math.floor(width / fontSize);
+
   if (!(window as any).matrixDrops) {
-    (window as any).matrixDrops = Array(columns).fill(1)
+    (window as any).matrixDrops = Array(columns).fill(1);
   }
-  const drops = (window as any).matrixDrops as number[]
-  
-  // Fade effect
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'
-  ctx.fillRect(0, 0, width, height)
-  
-  // Draw characters
-  ctx.fillStyle = '#837dbd'
-  ctx.font = `${fontSize}px monospace`
-  
+  const drops = (window as any).matrixDrops as number[];
+
+  ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#837dbd";
+  ctx.font = `${fontSize}px monospace`;
+
   for (let i = 0; i < drops.length; i++) {
-    const char = String.fromCharCode(0x30A0 + Math.random() * 96)
-    const x = i * fontSize
-    const y = drops[i] * fontSize
-    
-    // Random green tint
-    ctx.fillStyle = Math.random() > 0.7 ? '#d3ceff' : '#837dbd'
-    ctx.fillText(char, x, y)
-    
-    // Reset drop if it reaches bottom
+    const char = String.fromCharCode(0x30a0 + Math.random() * 96);
+    const x = i * fontSize;
+    const y = drops[i] * fontSize;
+
+    ctx.fillStyle = Math.random() > 0.7 ? "#d3ceff" : "#837dbd";
+    ctx.fillText(char, x, y);
+
     if (y > height && Math.random() > 0.975) {
-      drops[i] = 0
+      drops[i] = 0;
     }
-    
-    drops[i] = drops[i] + 1
+
+    drops[i] = drops[i] + 1;
   }
-}
+};
 
 const startDrag = (event: MouseEvent) => {
-  isDragging.value = true
-  lastMousePos = { x: event.clientX, y: event.clientY }
-}
+  isDragging.value = true;
+  lastMousePos = { x: event.clientX, y: event.clientY };
+};
 
 const drag = (event: MouseEvent) => {
-  if (!isDragging.value) return
-  
-  const deltaX = event.clientX - lastMousePos.x
-  const deltaY = event.clientY - lastMousePos.y
-  
-  rotation.value.y += deltaX * 0.5
-  rotation.value.x += deltaY * 0.5
-  
-  lastMousePos = { x: event.clientX, y: event.clientY }
-}
+  if (!isDragging.value) return;
+
+  const deltaX = event.clientX - lastMousePos.x;
+  const deltaY = event.clientY - lastMousePos.y;
+
+  rotation.value.y += deltaX * 0.5;
+  rotation.value.x += deltaY * 0.5;
+
+  lastMousePos = { x: event.clientX, y: event.clientY };
+};
 
 const stopDrag = () => {
-  isDragging.value = false
-}
+  isDragging.value = false;
+};
 
 const handleWheel = (event: WheelEvent) => {
-  event.preventDefault()
-  scale.value += event.deltaY * -0.001
-  scale.value = Math.min(Math.max(0.3, scale.value), 3)
-}
+  event.preventDefault();
+  scale.value += event.deltaY * -0.001;
+  scale.value = Math.min(Math.max(0.3, scale.value), 3);
+};
 
 const toggleVisualizer = () => {
-  isRunning.value = !isRunning.value
+  isRunning.value = !isRunning.value;
   if (isRunning.value) {
-    draw(performance.now())
+    draw(performance.now());
   }
-}
+};
 
 const resetView = () => {
-  rotation.value = { x: 0, y: 0 }
-  scale.value = 1
-}
+  rotation.value = { x: 0, y: 0 };
+  scale.value = 1;
+};
 
 const resizeCanvas = () => {
   if (canvas.value) {
-    canvas.value.width = canvas.value.offsetWidth
-    canvas.value.height = canvas.value.offsetHeight
+    canvas.value.width = canvas.value.offsetWidth;
+    canvas.value.height = canvas.value.offsetHeight;
   }
-}
+};
 
 onMounted(() => {
   if (canvas.value) {
-    resizeCanvas()
-    ctx.value = canvas.value.getContext('2d')!
-    draw(performance.now())
+    resizeCanvas();
+    ctx.value = canvas.value.getContext("2d");
+    draw(performance.now());
   }
-  
-  window.addEventListener('resize', resizeCanvas)
-})
+
+  window.addEventListener("resize", resizeCanvas);
+});
 
 onUnmounted(() => {
-  if (animationFrame) {
-    cancelAnimationFrame(animationFrame)
-  }
-  
-  if (audioContext) {
-    audioContext.close()
-  }
-  
-  disconnectAudio()
-  window.removeEventListener('resize', resizeCanvas)
-})
+  if (animationFrame) cancelAnimationFrame(animationFrame);
+  if (audioContext) audioContext.close().catch(() => {});
+  disconnectAudio();
+  window.removeEventListener("resize", resizeCanvas);
+});
 
-// Watch for mode changes to restart animation if paused
+// restart animation on mode change if paused
 watch(currentMode, () => {
   if (!isRunning.value) {
-    isRunning.value = true
-    draw(performance.now())
+    isRunning.value = true;
+    draw(performance.now());
   }
-})
+});
 </script>
+
 
 <style scoped>
 .scanlines {
@@ -631,4 +670,3 @@ watch(currentMode, () => {
   background: #d3ceff;
 }
 </style>
-[file content end]

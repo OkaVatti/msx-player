@@ -1,4 +1,4 @@
-// stores/player.ts - Extended version
+// stores/player.ts - Extended version (patched)
 import { defineStore } from "pinia";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import type { Song, PlayerState } from "../types";
@@ -152,14 +152,19 @@ export const usePlayerStore = defineStore("player", () => {
     // Set source and metadata
     audioElement.value.src = `http://localhost:1323${song.file_path}`;
 
-    // Update play count via API
-    await fetch(`http://localhost:1323/api/player/rate`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ song_id: song.id, rating: song.rating }),
-    });
+    // Update play count via API (best-effort)
+    try {
+      await fetch(`http://localhost:1323/api/player/rate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ song_id: song.id, rating: song.rating }),
+      });
+    } catch (err) {
+      // non-fatal
+      console.warn("Failed to update play count/rating:", err);
+    }
 
     // Play the song
     audioElement.value.volume = volume.value;
@@ -191,6 +196,23 @@ export const usePlayerStore = defineStore("player", () => {
       if (audioElement.value) {
         audioElement.value.pause();
         isPlaying.value = false;
+      }
+    }
+  };
+
+  const resume = async () => {
+    // Resume either via server or locally as a fallback
+    try {
+      const response = await fetch("http://localhost:1323/api/player/resume", {
+        method: "POST",
+      });
+
+      if (!response.ok) throw new Error("Failed to resume");
+    } catch (err) {
+      console.error("Error resuming via server:", err);
+      if (audioElement.value) {
+        await audioElement.value.play().catch(console.error);
+        isPlaying.value = true;
       }
     }
   };
@@ -284,7 +306,7 @@ export const usePlayerStore = defineStore("player", () => {
 
   const handleSongEnded = async () => {
     if (repeatMode.value === "one") {
-      // Play same song again
+      // Play same song again via server or locally
       if (currentSong.value) {
         await playSong(currentSong.value);
       }
@@ -411,6 +433,22 @@ export const usePlayerStore = defineStore("player", () => {
     }
   };
 
+  const hasNext = computed(() => {
+    if (!queue.value || queue.value.length === 0) return false;
+    if (shuffle.value) return queue.value.length > 1;
+    // if repeat all, always has next (wraps)
+    if (repeatMode.value === "all") return queue.value.length > 0;
+    return currentQueueIndex.value < queue.value.length - 1;
+  });
+
+  const hasPrevious = computed(() => {
+    if (!queue.value || queue.value.length === 0) return false;
+    // if shuffle, previous is available when queue length > 1
+    if (shuffle.value) return queue.value.length > 1;
+    if (repeatMode.value === "all") return queue.value.length > 0;
+    return currentQueueIndex.value > 0;
+  });
+
   // Lifecycle
   onMounted(() => {
     connectWebSocket();
@@ -440,14 +478,21 @@ export const usePlayerStore = defineStore("player", () => {
 
     // Computed
     progressPercentage,
+    hasNext,
+    hasPrevious,
 
     // Actions
     setAudioElement,
     playSong,
+    playSongLocally,
     pause,
+    resume,
     stop,
     nextSong,
     previousSong,
+    nextSongLocally,
+    previousSongLocally,
+    handleSongEnded,
     seek,
     setVolume,
     setSpeed,
@@ -456,5 +501,8 @@ export const usePlayerStore = defineStore("player", () => {
     setQueue,
     shuffleQueue,
     rateSong,
+    // WebSocket / lifecycle helpers if you want them accessible
+    connectWebSocket,
+    fetchPlayerState,
   };
 });

@@ -9,6 +9,7 @@ export const useLibraryStore = defineStore("library", () => {
   const playlists = ref<Playlist[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
+  const selectedPlaylistId = ref<number | null>(null);
 
   const filters = ref<LibraryFilters>({
     search: "",
@@ -58,7 +59,7 @@ export const useLibraryStore = defineStore("library", () => {
         case "last_played":
           return (
             new Date(b.last_played || 0).getTime() -
-            new Date(a.last_played || 0).getTime()
+            new Date(b.last_played || 0).getTime()
           );
         default:
           return a.title.localeCompare(b.title);
@@ -84,77 +85,6 @@ export const useLibraryStore = defineStore("library", () => {
   });
 
   // Actions
-  const fetchSongs = async () => {
-    loading.value = true;
-    error.value = null;
-
-    try {
-      const url = new URL("http://localhost:1323/api/songs");
-
-      // Add filters to query params
-      if (filters.value.search) {
-        url.searchParams.append("search", filters.value.search);
-      }
-      if (filters.value.sortBy) {
-        url.searchParams.append("sort_by", filters.value.sortBy);
-      }
-      if (filters.value.genre) {
-        url.searchParams.append("genre", filters.value.genre);
-      }
-      if (filters.value.rating !== null) {
-        url.searchParams.append("rating", filters.value.rating.toString());
-      }
-
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch songs: ${response.status}`);
-      }
-
-      songs.value = await response.json();
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : "Unknown error";
-      console.error("Error fetching songs:", err);
-    } finally {
-      loading.value = false;
-    }
-  };
-
-  const fetchPlaylists = async () => {
-    try {
-      const response = await fetch("http://localhost:1323/api/playlists");
-      if (!response.ok) {
-        throw new Error(`Failed to fetch playlists: ${response.status}`);
-      }
-      playlists.value = await response.json();
-    } catch (err) {
-      console.error("Error fetching playlists:", err);
-    }
-  };
-
-  const createPlaylist = async (name: string, description: string = "") => {
-    try {
-      const response = await fetch("http://localhost:1323/api/playlists", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name, description }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to create playlist");
-      }
-
-      const newPlaylist = await response.json();
-      playlists.value.push(newPlaylist);
-      return newPlaylist;
-    } catch (err) {
-      console.error("Error creating playlist:", err);
-      throw err;
-    }
-  };
-
   const updatePlaylist = async (id: number, updates: Partial<Playlist>) => {
     try {
       const response = await fetch(
@@ -181,22 +111,35 @@ export const useLibraryStore = defineStore("library", () => {
     }
   };
 
-  const deletePlaylist = async (id: number) => {
+  const fetchSongs = async () => {
     try {
-      const response = await fetch(
-        `http://localhost:1323/api/playlists/${id}`,
-        {
-          method: "DELETE",
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to delete playlist");
-
-      playlists.value = playlists.value.filter((p) => p.id !== id);
+      const res = await fetch("http://localhost:1323/api/library/songs");
+      if (!res.ok) throw new Error("Failed to fetch songs");
+      const data: Song[] = await res.json();
+      songs.value = data;
     } catch (err) {
-      console.error("Error deleting playlist:", err);
-      throw err;
+      console.error("fetchSongs error:", err);
     }
+  };
+
+  const fetchPlaylists = async () => {
+    try {
+      const res = await fetch("http://localhost:1323/api/library/playlists");
+      if (!res.ok) throw new Error("Failed to fetch playlists");
+      const data: Playlist[] = await res.json();
+      playlists.value = data;
+    } catch (err) {
+      console.error("fetchPlaylists error:", err);
+    }
+  };
+
+  const createPlaylist = (p: Playlist) => {
+    playlists.value.push(p);
+  };
+
+  const deletePlaylist = (id: number) => {
+    playlists.value = playlists.value.filter((pl) => pl.id !== id);
+    if (selectedPlaylistId.value === id) selectedPlaylistId.value = null;
   };
 
   const addSongToPlaylist = async (playlistId: number, songId: number) => {
@@ -368,6 +311,7 @@ export const useLibraryStore = defineStore("library", () => {
     filteredSongs,
     genres,
     searchQuery,
+    selectedPlaylistId,
 
     // Actions
     fetchSongs,

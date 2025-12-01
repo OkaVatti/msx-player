@@ -1,5 +1,3 @@
-[file name]: menus/ControlsMenu.vue
-[file content begin]
 <template>
   <div class="absolute top-full left-0 mt-1 bg-black border border-[#837dbd] p-2 z-50 min-w-48">
     <button 
@@ -93,4 +91,3 @@ const toggleShuffle = () => {
   emit('close')
 }
 </script>
-[file content end]

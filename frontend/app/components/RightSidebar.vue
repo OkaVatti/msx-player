@@ -1,379 +1,117 @@
-<!-- App.vue -->
 <template>
-  <div class="app-container">
-    <!-- Audio Player Element (Hidden) -->
-    <audio 
-      ref="audioElement" 
-      preload="auto"
-      @timeupdate="onTimeUpdate"
-      @ended="onEnded"
-      @loadedmetadata="onLoadedMetadata"
-      @error="onAudioError"
-    ></audio>
-    
-    <div class="h-screen flex flex-col bg-black text-white">
-      <!-- Header -->
-      <header class="border-b-2 border-[#837dbd] p-4 bg-black">
-        <div class="container mx-auto flex justify-between items-center">
-          <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-[#837dbd] rounded-full animate-pulse"></div>
-            <h1 class="text-xl font-bold text-[#d3ceff] font-mono">MSX AUDIO PLAYER</h1>
+  <div class="w-80 bg-black border-l border-[#837dbd] p-4 overflow-y-auto">
+    <!-- Now Playing -->
+    <div class="mb-6">
+      <div class="text-xs text-[#837dbd] uppercase tracking-wider mb-4">NOW PLAYING</div>
+      
+      <div v-if="playerStore.currentSong" class="space-y-4">
+        <!-- Album Art -->
+        <div class="border border-[#837dbd] p-4 bg-[#111]">
+          <div class="aspect-square bg-linear-to-br from-[#837dbd] to-[#d3ceff] flex items-center justify-center">
+            <span class="text-4xl text-black">♪</span>
           </div>
-          
-          <div class="flex items-center gap-4">
-            <div class="flex items-center gap-2">
-              <div class="w-2 h-2 rounded-full animate-pulse" :class="isConnected ? 'bg-green-400' : 'bg-red-400'"></div>
-              <span class="text-sm font-mono" :class="isConnected ? 'text-green-400' : 'text-red-400'">
-                {{ isConnected ? 'CONNECTED' : 'DISCONNECTED' }}
-              </span>
-            </div>
+        </div>
+
+        <!-- Song Info -->
+        <div>
+          <div class="text-lg font-bold text-[#d3ceff] truncate">{{ playerStore.currentSong.title }}</div>
+          <div class="text-sm text-[#837dbd]">{{ playerStore.currentSong.artist }}</div>
+          <div class="text-xs text-[#837dbd] mt-1">{{ playerStore.currentSong.album }}</div>
+        </div>
+
+        <!-- Rating -->
+        <div class="space-y-2">
+          <div class="text-xs text-[#837dbd]">RATING</div>
+          <div class="flex justify-center space-x-1">
             <button
-              @click="reconnectAudio"
-              class="px-3 py-1 border border-[#837dbd] text-[#837dbd] hover:bg-[#837dbd] hover:text-black transition-all text-xs font-mono"
+              v-for="star in 10"
+              :key="star"
+              @click="rateSong(star)"
+              class="text-xl transition-all duration-200 hover:scale-125"
+              :class="star <= (playerStore.currentSong?.rating || 0) ? 'text-yellow-400' : 'text-[#333]'"
             >
-              RECONNECT
+              ★
             </button>
           </div>
         </div>
-      </header>
 
-      <!-- Main Content -->
-      <main class="flex-1 overflow-hidden">
-        <router-view 
-          :audio-element="audioElement"
-          :current-song="currentSong"
-          :is-playing="isPlaying"
-          :volume="volume"
-          @play="playSong"
-          @pause="pausePlayer"
-          @volume-change="setVolume"
-          @seek="seekTo"
-        />
-      </main>
-
-      <!-- Now Playing Bar (Fixed at bottom) -->
-      <div v-if="currentSong" class="border-t-2 border-[#837dbd] bg-black p-4">
-        <div class="container mx-auto">
-          <div class="flex items-center justify-between">
-            <!-- Song Info -->
-            <div class="flex items-center gap-4 flex-1">
-              <div class="w-12 h-12 bg-gradient-to-br from-[#837dbd] to-[#d3ceff] flex items-center justify-center">
-                <span class="text-2xl">♪</span>
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="text-[#d3ceff] font-mono truncate">{{ currentSong.title }}</div>
-                <div class="text-[#837dbd] text-sm font-mono truncate">{{ currentSong.artist }} • {{ currentSong.album }}</div>
-              </div>
-            </div>
-
-            <!-- Playback Controls -->
-            <div class="flex items-center gap-6">
-              <button @click="previousSong" class="text-2xl text-[#837dbd] hover:text-[#d3ceff]">
-                ⏮
-              </button>
-              <button
-                v-if="!isPlaying"
-                @click="resumePlayer"
-                class="w-12 h-12 bg-[#837dbd] text-black rounded-full flex items-center justify-center hover:bg-[#d3ceff]"
-              >
-                ▶
-              </button>
-              <button
-                v-else
-                @click="pausePlayer"
-                class="w-12 h-12 bg-[#837dbd] text-black rounded-full flex items-center justify-center hover:bg-[#d3ceff]"
-              >
-                ⏸
-              </button>
-              <button @click="nextSong" class="text-2xl text-[#837dbd] hover:text-[#d3ceff]">
-                ⏭
-              </button>
-            </div>
-
-            <!-- Progress and Volume -->
-            <div class="flex-1 max-w-md space-y-2">
-              <div class="flex items-center gap-3">
-                <span class="text-xs text-[#837dbd] font-mono w-12">{{ formatTime(currentTime) }}</span>
-                <input
-                  v-model="currentTime"
-                  @input="onSeekInput"
-                  type="range"
-                  min="0"
-                  :max="duration"
-                  step="1"
-                  class="flex-1 h-1 bg-[#5a548d] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#d3ceff]"
-                />
-                <span class="text-xs text-[#837dbd] font-mono w-12">{{ formatTime(duration) }}</span>
-              </div>
-              
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-[#837dbd] font-mono">VOL</span>
-                <input
-                  v-model="volume"
-                  @input="setVolume"
-                  type="range"
-                  min="0"
-                  max="1"
-                  step="0.01"
-                  class="flex-1 h-1 bg-[#5a548d] rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#d3ceff]"
-                />
-                <span class="text-xs text-[#837dbd] font-mono w-12">{{ Math.round(volume * 100) }}%</span>
-              </div>
-            </div>
+        <!-- Progress Bar -->
+        <div class="space-y-2">
+          <div class="flex justify-between text-xs text-[#837dbd]">
+            <span>{{ formatTime(playerStore.currentTime) }}</span>
+            <span>{{ formatTime(playerStore.duration) }}</span>
           </div>
+          <div class="h-1 bg-[#333] cursor-pointer" @click="seekToTime">
+            <div class="h-full bg-[#d3ceff]" :style="{ width: playerStore.progressPercentage + '%' }"></div>
+          </div>
+        </div>
+      </div>
+      
+      <div v-else class="text-center p-8 border border-[#837dbd]">
+        <pre class="text-[#837dbd] text-xs">
+╔═══════════════════════════╗
+║   NO SONG PLAYING         ║
+║   SELECT A TRACK TO START ║
+╚═══════════════════════════╝</pre>
+      </div>
+    </div>
+
+    <!-- Up Next -->
+    <div class="mb-6">
+      <div class="text-xs text-[#837dbd] uppercase tracking-wider mb-2 flex justify-between">
+        <span>UP NEXT</span>
+        <button @click="shuffleQueue" class="text-xs text-[#d3ceff] hover:text-white">SHUFFLE</button>
+      </div>
+      <div class="space-y-2">
+        <div v-for="song in upNextSongs" :key="song.id" 
+             class="flex items-center gap-3 p-2 hover:bg-[#1a1a1a] cursor-pointer"
+             @click="playSong(song)">
+          <div class="text-xs text-[#837dbd] w-4">{{ song.index }}</div>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm truncate text-[#d3ceff]">{{ song.title }}</div>
+            <div class="text-xs text-[#837dbd] truncate">{{ song.artist }}</div>
+          </div>
+          <div class="text-xs text-[#837dbd]">{{ formatDuration(song.duration) }}</div>
         </div>
       </div>
     </div>
 
-    <!-- Connection Error Modal -->
-    <div v-if="showConnectionError" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center z-50">
-      <div class="border-2 border-red-400 bg-black p-8 max-w-md">
-        <div class="text-center space-y-4">
-          <div class="text-4xl text-red-400">⚠</div>
-          <h3 class="text-xl text-red-400 font-mono">AUDIO CONNECTION ERROR</h3>
-          <p class="text-[#837dbd]">
-            Unable to connect to audio stream. Please check:
-          </p>
-          <ul class="text-left text-sm text-[#837dbd] space-y-2 list-disc list-inside">
-            <li>Server is running on localhost:1323</li>
-            <li>CORS is properly configured</li>
-            <li>Audio files are accessible</li>
-          </ul>
-          <div class="flex gap-4 justify-center mt-6">
-            <button
-              @click="reconnectAudio"
-              class="px-4 py-2 bg-[#837dbd] text-black hover:bg-[#d3ceff] font-mono"
-            >
-              RETRY
-            </button>
-            <button
-              @click="showConnectionError = false"
-              class="px-4 py-2 border border-[#837dbd] text-[#837dbd] hover:bg-[#837dbd] hover:text-black font-mono"
-            >
-              CLOSE
-            </button>
-          </div>
-        </div>
+    <!-- Mini Visualizer -->
+    <div class="border border-[#837dbd] p-4">
+      <div class="text-xs text-[#837dbd] uppercase tracking-wider mb-2 flex justify-between items-center">
+        <span>VISUALIZER</span>
+        <button @click="cycleVisualizerMode" class="text-xs text-[#d3ceff] hover:text-white">
+          [{{ visualizerMode.toUpperCase() }}]
+        </button>
+      </div>
+      <div class="h-32 bg-black border border-[#837dbd] relative overflow-hidden">
+        <canvas ref="visualizerCanvas" class="w-full h-full"></canvas>
+        <div class="absolute inset-0 pointer-events-none scanlines"></div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { usePlayerStore } from '../../stores/player'
+import type { Song } from '../../types'
 
-const router = useRouter()
-const audioElement = ref<HTMLAudioElement>()
-const isConnected = ref(false)
-const isPlaying = ref(false)
-const currentSong = ref<any>(null)
-const currentTime = ref(0)
-const duration = ref(0)
-const volume = ref(0.7)
-const showConnectionError = ref(false)
+const playerStore = usePlayerStore()
+const visualizerCanvas = ref<HTMLCanvasElement>()
 
-// Fetch initial player state
-const fetchPlayerState = async () => {
-  try {
-    const response = await fetch('http://localhost:1323/api/player/state')
-    if (response.ok) {
-      const state = await response.json()
-      isConnected.value = state.is_connected
-      currentSong.value = state.current_song
-      isPlaying.value = state.is_playing
-      currentTime.value = state.current_time
-      duration.value = state.duration
-      volume.value = state.volume
-      
-      // If there's a current song, load it
-      if (currentSong.value && audioElement.value) {
-        await loadAudioStream(currentSong.value.id)
-      }
-    }
-  } catch (error) {
-    console.error('Failed to fetch player state:', error)
-    isConnected.value = false
-  }
-}
+const visualizerMode = ref<'wave' | 'bars' | 'circular'>('wave')
 
-// Load audio stream from API
-const loadAudioStream = async (songId: number) => {
-  if (!audioElement.value) return
+const upNextSongs = computed(() => {
+  if (!playerStore.currentSong || !playerStore.queue.length) return []
   
-  try {
-    // Clear previous source
-    audioElement.value.pause()
-    audioElement.value.src = ''
-    
-    // Load stream from API endpoint
-    const streamUrl = `http://localhost:1323/api/songs/${songId}/stream`
-    audioElement.value.src = streamUrl
-    audioElement.value.volume = volume.value
-    
-    // Add timestamp to prevent caching issues
-    audioElement.value.src += `?t=${Date.now()}`
-    
-    await audioElement.value.load()
-    isConnected.value = true
-    showConnectionError.value = false
-  } catch (error) {
-    console.error('Failed to load audio stream:', error)
-    showConnectionError.value = true
-    isConnected.value = false
-  }
-}
+  const currentIndex = playerStore.queue.findIndex(song => song.id === playerStore.currentSong?.id)
+  return playerStore.queue.slice(currentIndex + 1, currentIndex + 6).map((song, i) => ({
+    ...song,
+    index: i + 1
+  }))
+})
 
-// Play song by ID
-const playSong = async (song: any) => {
-  if (!song) return
-  
-  currentSong.value = song
-  
-  try {
-    // First, try to set the song via API
-    const response = await fetch(`http://localhost:1323/api/player/play/${song.id}`, {
-      method: 'POST'
-    })
-    
-    if (response.ok) {
-      // Then load the stream
-      await loadAudioStream(song.id)
-      
-      if (audioElement.value) {
-        await audioElement.value.play()
-        isPlaying.value = true
-      }
-    }
-  } catch (error) {
-    console.error('Failed to play song:', error)
-    // Fallback: load stream directly
-    await loadAudioStream(song.id)
-    if (audioElement.value) {
-      await audioElement.value.play()
-      isPlaying.value = true
-    }
-  }
-}
-
-// Resume player
-const resumePlayer = async () => {
-  if (!audioElement.value) return
-  
-  try {
-    if (currentSong.value) {
-      // Resume via API
-      const response = await fetch('http://localhost:1323/api/player/resume', {
-        method: 'POST'
-      })
-      
-      if (response.ok) {
-        await audioElement.value.play()
-        isPlaying.value = true
-      }
-    } else {
-      // Get first song from library and play it
-      const response = await fetch('http://localhost:1323/api/songs?limit=1')
-      if (response.ok) {
-        const songs = await response.json()
-        if (songs.length > 0) {
-          await playSong(songs[0])
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Failed to resume:', error)
-    // Fallback: play directly
-    if (audioElement.value) {
-      await audioElement.value.play()
-      isPlaying.value = true
-    }
-  }
-}
-
-// Pause player
-const pausePlayer = async () => {
-  if (!audioElement.value) return
-  
-  try {
-    // Pause via API
-    await fetch('http://localhost:1323/api/player/pause', {
-      method: 'POST'
-    })
-    
-    audioElement.value.pause()
-    isPlaying.value = false
-  } catch (error) {
-    console.error('Failed to pause:', error)
-    // Fallback: pause directly
-    audioElement.value.pause()
-    isPlaying.value = false
-  }
-}
-
-// Previous song
-const previousSong = async () => {
-  try {
-    const response = await fetch('http://localhost:1323/api/player/previous', {
-      method: 'POST'
-    })
-    
-    if (response.ok) {
-      await fetchPlayerState()
-    }
-  } catch (error) {
-    console.error('Failed to go to previous song:', error)
-  }
-}
-
-// Next song
-const nextSong = async () => {
-  try {
-    const response = await fetch('http://localhost:1323/api/player/next', {
-      method: 'POST'
-    })
-    
-    if (response.ok) {
-      await fetchPlayerState()
-    }
-  } catch (error) {
-    console.error('Failed to go to next song:', error)
-  }
-}
-
-// Set volume
-const setVolume = (event?: Event) => {
-  if (!audioElement.value) return
-  
-  const newVolume = event ? parseFloat((event.target as HTMLInputElement).value) : volume.value
-  volume.value = newVolume
-  audioElement.value.volume = newVolume
-  
-  // Also update on server
-  fetch(`http://localhost:1323/api/player/volume?value=${newVolume}`, {
-    method: 'POST'
-  }).catch(console.error)
-}
-
-// Seek to position
-const seekTo = (time: number) => {
-  if (!audioElement.value) return
-  
-  currentTime.value = time
-  audioElement.value.currentTime = time
-  
-  // Update on server
-  fetch(`http://localhost:1323/api/player/seek?time=${time}`, {
-    method: 'POST'
-  }).catch(console.error)
-}
-
-const onSeekInput = (event: Event) => {
-  const time = parseFloat((event.target as HTMLInputElement).value)
-  seekTo(time)
-}
-
-// Format time (MM:SS)
 const formatTime = (seconds: number) => {
   if (!seconds || isNaN(seconds)) return '0:00'
   const mins = Math.floor(seconds / 60)
@@ -381,111 +119,252 @@ const formatTime = (seconds: number) => {
   return `${mins}:${secs.toString().padStart(2, '0')}`
 }
 
-// Event listeners
-const onTimeUpdate = () => {
-  if (audioElement.value) {
-    currentTime.value = audioElement.value.currentTime
+const formatDuration = (seconds: number) => {
+  if (!seconds) return '0:00'
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins}:${secs.toString().padStart(2, '0')}`
+}
+
+const seekToTime = (event: MouseEvent) => {
+  const element = event.currentTarget as HTMLElement
+  const rect = element.getBoundingClientRect()
+  const percent = (event.clientX - rect.left) / rect.width
+  const newTime = percent * (playerStore.duration as number)
+  playerStore.seek(newTime)
+}
+
+const rateSong = async (rating: number) => {
+  if (playerStore.currentSong) {
+    await playerStore.rateSong(playerStore.currentSong.id, rating)
   }
 }
 
-const onEnded = () => {
-  isPlaying.value = false
-  // Auto-play next song
-  nextSong()
+const playSong = async (song: Song) => {
+  await playerStore.playSong(song)
 }
 
-const onLoadedMetadata = () => {
-  if (audioElement.value) {
-    duration.value = audioElement.value.duration
+const shuffleQueue = () => {
+  playerStore.shuffleQueue()
+}
+
+const cycleVisualizerMode = () => {
+  const modes: Array<'wave' | 'bars' | 'circular'> = ['wave', 'bars', 'circular']
+  const currentIndex = modes.indexOf(visualizerMode.value)
+  const nextIndex = (currentIndex + 1) % modes.length
+  visualizerMode.value = modes[nextIndex]
+}
+
+let animationFrame: number
+let audioContext: AudioContext | null = null
+let analyser: AnalyserNode | null = null
+let dataArray: Uint8Array | null = null
+
+const setupAudioContext = async () => {
+  if (!audioContext) {
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    analyser = audioContext.createAnalyser()
+    analyser.fftSize = 128
+    dataArray = new Uint8Array(analyser.frequencyBinCount)
+    // Some browsers require user gesture: resume when created
+    await audioContext.resume().catch(() => {})
   }
 }
 
-const onAudioError = (event: Event) => {
-  console.error('Audio error:', event)
-  showConnectionError.value = true
-  isConnected.value = false
+const connectAudioElement = async (audioElement: HTMLAudioElement | null) => {
+  if (!audioElement) return
+  await setupAudioContext()
+  if (!audioContext || !analyser) return
+
+  try {
+    const source = audioContext.createMediaElementSource(audioElement)
+    source.connect(analyser)
+    analyser.connect(audioContext.destination)
+  } catch (err) {
+    // connecting twice throws in some cases; ignore non-fatal
+    console.warn("Visualizer connectAudioElement:", err)
+  }
 }
 
-const reconnectAudio = async () => {
-  showConnectionError.value = false
-  await fetchPlayerState()
+const drawVisualizer = () => {
+  if (!visualizerCanvas.value) return
+  
+  const canvas = visualizerCanvas.value
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  
+  // Set canvas dimensions
+  canvas.width = canvas.offsetWidth
+  canvas.height = canvas.offsetHeight
+  
+  const width = canvas.width
+  const height = canvas.height
+  
+  // Clear with fade effect
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.1)'
+  ctx.fillRect(0, 0, width, height)
+  
+  // Get or generate audio data (ensure ArrayBuffer-backed Uint8Array)
+  let audioData: Uint8Array = dataArray ?? new Uint8Array(new ArrayBuffer(64));
+  
+  if (analyser) {
+    // Create a view that TypeScript will accept as ArrayBuffer-backed.
+    // If audioData.buffer is already an ArrayBuffer this is zero-copy.
+    const safeArray = new Uint8Array(
+      audioData.buffer as ArrayBuffer,
+      audioData.byteOffset,
+      audioData.length
+    );
+  
+    analyser.getByteFrequencyData(safeArray);
+  
+    // use safeArray for downstream calculations/rendering
+    audioData = safeArray;
+  } else {
+    // Demo data — create a concrete ArrayBuffer-backed array to avoid typing issues
+    audioData = new Uint8Array(new ArrayBuffer(64));
+    const time = Date.now() / 1000;
+    for (let i = 0; i < audioData.length; i++) {
+      // keep values inside [0,255]
+      audioData[i] = Math.floor(Math.abs(Math.sin(time * 2 + i * 0.1)) * 255);
+    }
+  }
+
+  
+  // Draw based on mode
+  switch (visualizerMode.value) {
+    case 'wave':
+      drawWave(ctx, width, height, audioData)
+      break
+    case 'bars':
+      drawBars(ctx, width, height, audioData)
+      break
+    case 'circular':
+      drawCircular(ctx, width, height, audioData)
+      break
+  }
+  
+  animationFrame = requestAnimationFrame(drawVisualizer)
 }
 
-// Initialize
+const drawWave = (ctx: CanvasRenderingContext2D, width: number, height: number, data: Uint8Array) => {
+  ctx.beginPath()
+  ctx.lineWidth = 2
+  ctx.strokeStyle = '#d3ceff'
+  
+  const sliceWidth = width / data.length
+  let x = 0
+
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 255
+    const y = (1 - v) * height
+
+    if (i === 0) {
+      ctx.moveTo(x, y)
+    } else {
+      ctx.lineTo(x, y)
+    }
+
+    x += sliceWidth
+  }
+
+  ctx.stroke()
+}
+
+const drawBars = (ctx: CanvasRenderingContext2D, width: number, height: number, data: Uint8Array) => {
+  const barCount = 16
+  const barWidth = width / barCount
+  
+  for (let i = 0; i < barCount; i++) {
+    const dataIndex = Math.floor((i / barCount) * data.length)
+    const amplitude = data[dataIndex] / 255
+    const barHeight = amplitude * height * 0.8
+    
+    const x = i * barWidth
+    const y = height - barHeight
+    
+    // Gradient effect
+    const gradient = ctx.createLinearGradient(x, y, x, y + barHeight)
+    gradient.addColorStop(0, '#d3ceff')
+    gradient.addColorStop(0.5, '#837dbd')
+    gradient.addColorStop(1, '#5a5586')
+    
+    ctx.fillStyle = gradient
+    ctx.fillRect(x + 1, y, barWidth - 2, barHeight)
+  }
+}
+
+const drawCircular = (ctx: CanvasRenderingContext2D, width: number, height: number, data: Uint8Array) => {
+  const centerX = width / 2
+  const centerY = height / 2
+  const baseRadius = Math.min(width, height) / 6
+
+  // Draw base circle
+  ctx.beginPath()
+  ctx.arc(centerX, centerY, baseRadius, 0, Math.PI * 2)
+  ctx.strokeStyle = '#837dbd'
+  ctx.lineWidth = 1
+  ctx.stroke()
+
+  // Draw frequency response
+  ctx.beginPath()
+  for (let i = 0; i < data.length; i++) {
+    const amplitude = data[i] / 255
+    const angle = (i / data.length) * Math.PI * 2
+    const radius = baseRadius + amplitude * baseRadius
+    
+    const x = centerX + Math.cos(angle) * radius
+    const y = centerY + Math.sin(angle) * radius
+    
+    if (i === 0) {
+      ctx.moveTo(x, y)
+    } else {
+      ctx.lineTo(x, y)
+    }
+  }
+  ctx.closePath()
+  
+  ctx.fillStyle = 'rgba(131, 125, 189, 0.2)'
+  ctx.fill()
+  ctx.strokeStyle = '#d3ceff'
+  ctx.lineWidth = 1
+  ctx.stroke()
+}
+
 onMounted(async () => {
-  await fetchPlayerState()
-  
-  // Set initial volume
-  if (audioElement.value) {
-    audioElement.value.volume = volume.value
+  drawVisualizer()
+
+  // Try to obtain audio element from store first, otherwise DOM query
+  let audioEl: HTMLAudioElement | null = null
+  try {
+    // If the store stores an element reference directly, use it
+    const maybe = (playerStore as any).audioElement
+    if (maybe && typeof (maybe as any).currentTime === "number") {
+      audioEl = maybe as unknown as HTMLAudioElement
+    } else {
+      audioEl = document.querySelector('audio') as HTMLAudioElement | null
+    }
+  } catch {
+    audioEl = document.querySelector('audio') as HTMLAudioElement | null
   }
-  
-  // Poll for updates
-  const interval = setInterval(fetchPlayerState, 5000)
-  
-  onUnmounted(() => {
-    clearInterval(interval)
-  })
+
+  if (audioEl) {
+    await connectAudioElement(audioEl)
+  }
 })
 
-// Watch for route changes to update player
-watch(() => router.currentRoute.value, fetchPlayerState)
+onUnmounted(() => {
+  if (animationFrame) {
+    cancelAnimationFrame(animationFrame)
+  }
+  if (audioContext) {
+    audioContext.close().catch(() => {})
+  }
+})
+
+// Watch for audio element changes (store may update later)
+watch(() => (playerStore as any).audioElement, (el) => {
+  const audioEl = (el && typeof (el as any).currentTime === "number") ? (el as unknown as HTMLAudioElement) : document.querySelector('audio') as HTMLAudioElement | null
+  if (audioEl) connectAudioElement(audioEl)
+})
 </script>
-
-<style scoped>
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #000;
-  border: 1px solid #5a548d;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #837dbd;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #d3ceff;
-}
-
-/* Range slider styling */
-input[type="range"] {
-  -webkit-appearance: none;
-  appearance: none;
-  background: transparent;
-  cursor: pointer;
-}
-
-input[type="range"]::-webkit-slider-track {
-  background: #5a548d;
-  height: 0.25rem;
-  border-radius: 0.25rem;
-}
-
-input[type="range"]::-moz-range-track {
-  background: #5a548d;
-  height: 0.25rem;
-  border-radius: 0.25rem;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  height: 1rem;
-  width: 1rem;
-  background-color: #d3ceff;
-  border-radius: 50%;
-  margin-top: -0.375rem;
-}
-
-input[type="range"]::-moz-range-thumb {
-  border: none;
-  border-radius: 50%;
-  height: 1rem;
-  width: 1rem;
-  background-color: #d3ceff;
-}
-</style>
