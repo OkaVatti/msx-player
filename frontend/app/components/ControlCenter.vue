@@ -1,7 +1,7 @@
 <template>
   <div class="space-y-6">
     <!-- Control Center Header -->
-    <div class="bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl p-6 border-2 border-lime-400">
+    <div class="bg-linear-to-r from-gray-800 to-gray-900 rounded-xl p-6 border-2 border-lime-400">
       <h3 class="text-2xl font-bold text-lime-400 mb-2">CONTROL CENTER</h3>
       <p class="text-gray-400">Advanced playback controls and settings</p>
     </div>
@@ -62,7 +62,7 @@
             ref="progressBar"
           >
             <div
-              class="h-full bg-gradient-to-r from-lime-400 to-green-500 rounded-full transition-all duration-500"
+              class="h-full bg-linear-to-r from-lime-400 to-green-500 rounded-full transition-all duration-500"
               :style="{ width: playerStore.progressPercentage + '%' }"
             ></div>
           </div>

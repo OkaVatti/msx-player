@@ -109,7 +109,7 @@
                 </button>
               </div>
             </td>
-            <td class="p-3 text-lime-300 font-mono">{{ song.playCount || 0 }}</td>
+            <td class="p-3 text-lime-300 font-mono">{{ song.play_count || 0 }}</td>
             <td class="p-3">
               <div class="flex gap-2">
                 <button
@@ -253,7 +253,7 @@
             <div>
               <label class="block text-sm text-lime-400 mb-2 font-mono">TRACK NUMBER</label>
               <input
-                v-model="editingSong.trackNumber"
+                v-model="editingSong.id"
                 type="number"
                 min="1"
                 class="w-full px-3 py-2 bg-black border-2 border-lime-400 text-lime-400 font-mono focus:outline-none focus:border-lime-300"
@@ -410,7 +410,7 @@ const saveSongEdit = async () => {
       album: editingSong.value.album,
       genre: editingSong.value.genre,
       year: editingSong.value.year,
-      trackNumber: editingSong.value.trackNumber,
+      trackNumber: editingSong.value.id,
       explicit: editingSong.value.explicit,
       clean: editingSong.value.clean,
     };

@@ -1,3 +1,4 @@
+// types/index.ts - Updated to match backend
 export interface Song {
   id: number;
   title: string;
@@ -6,15 +7,13 @@ export interface Song {
   genre: string;
   year: number;
   duration: number;
+  file_path: string;
   rating: number;
-  playCount: number;
+  play_count: number;
+  last_played: string;
+  created_at: string;
   explicit: boolean;
   clean: boolean;
-  trackNumber: number;
-  filePath: string;
-  lastPlayed?: string;
-  fileSize?: number;
-  bitrate?: number;
 }
 
 export interface Playlist {
@@ -22,13 +21,27 @@ export interface Playlist {
   name: string;
   description: string;
   songs: Song[];
-  createdAt: string;
+  created_at: string;
 }
+
 export interface PlayerState {
-  isPlaying: boolean;
-  currentSong: Song | null;
-  currentTime: number;
+  is_playing: boolean;
+  current_song: Song | null;
+  current_time: number;
   duration: number;
   volume: number;
   speed: number;
+}
+
+export interface LibraryFilters {
+  search: string;
+  sortBy: string;
+  genre: string;
+  rating: number | null;
+}
+
+export interface UploadResponse {
+  message: string;
+  song?: Song;
+  error?: string;
 }

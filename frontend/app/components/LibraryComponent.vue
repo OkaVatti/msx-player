@@ -62,7 +62,7 @@
       >
         <!-- Album Art Placeholder -->
         <div class="relative">
-          <div class="w-full h-48 bg-gradient-to-br from-purple-500 to-lime-400 flex items-center justify-center">
+          <div class="w-full h-48 bg-linear-to-br from-purple-500 to-lime-400 flex items-center justify-center">
             <span class="text-4xl text-white">♪</span>
           </div>
           <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
@@ -107,13 +107,13 @@
             </div>
             <div class="text-xs text-gray-400 flex items-center gap-1">
               <span>▶</span>
-              <span>{{ song.playCount || 0 }}</span>
+              <span>{{ song.play_count || 0 }}</span>
             </div>
           </div>
           
           <!-- File Info -->
           <div class="mt-2 text-xs text-gray-500 truncate">
-            {{ getFilename(song.filePath) }}
+            {{ getFilename(song.file_path) }}
           </div>
         </div>
       </div>
