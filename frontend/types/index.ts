@@ -6,13 +6,15 @@ export interface Song {
   genre: string;
   year: number;
   duration: number;
-  filePath: string;
   rating: number;
   playCount: number;
-  lastPlayed: string;
-  createdAt: string;
   explicit: boolean;
   clean: boolean;
+  trackNumber: number;
+  filePath: string;
+  lastPlayed?: string;
+  fileSize?: number;
+  bitrate?: number;
 }
 
 export interface Playlist {
@@ -22,7 +24,6 @@ export interface Playlist {
   songs: Song[];
   createdAt: string;
 }
-
 export interface PlayerState {
   isPlaying: boolean;
   currentSong: Song | null;

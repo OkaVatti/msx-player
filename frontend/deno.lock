@@ -6,6 +6,7 @@
     "npm:@types/deno@^2.5.0": "2.5.0",
     "npm:@types/node@^24.2.0": "24.10.1",
     "npm:autoprefixer@^10.4.14": "10.4.22_postcss@8.5.6",
+    "npm:nuxt@*": "4.2.1_@types+node@24.10.1_vue@3.5.25_oxc-parser@0.96.0_vue-router@4.6.3__vue@3.5.25_jiti@2.6.1",
     "npm:nuxt@^4.2.1": "4.2.1_@types+node@24.10.1_vue@3.5.25_oxc-parser@0.96.0_vue-router@4.6.3__vue@3.5.25_jiti@2.6.1",
     "npm:ofetch@^1.5.1": "1.5.1",
     "npm:pinia@^3.0.4": "3.0.4_vue@3.5.25",

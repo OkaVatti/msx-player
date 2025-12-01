@@ -1,78 +1,151 @@
 <template>
-  <div class="bg-gray-800 rounded-lg p-6">
-    <h2 class="text-xl font-semibold mb-4">Search</h2>
-    
-    <div class="space-y-4">
-      <input
-        v-model="libraryStore.searchQuery"
-        type="text"
-        placeholder="Search songs, artists, albums..."
-        class="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-        @input="debouncedSearch"
-      >
+  <div class="space-y-4">
+    <div class="border-2 border-lime-400 p-4 bg-black">
+      <h2 class="text-xl mb-4 flex items-center gap-2">
+        <span class="animate-pulse">&gt;&gt;</span>
+        SEARCH SYSTEM
+        <span class="text-xs text-white">[REAL-TIME FILTERING]</span>
+      </h2>
 
-      <div class="space-y-2">
-        <select
-          v-model="libraryStore.filters.genre"
-          class="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+      <div class="relative">
+        <input
+          v-model="libraryStore.searchQuery"
+          type="text"
+          placeholder="ENTER SEARCH QUERY..."
+          class="w-full bg-black border-2 border-lime-400 text-lime-400 p-3 focus:outline-none focus:bg-lime-400 focus:text-black font-mono"
+          @input="handleSearch"
+        />
+        <div
+          v-if="libraryStore.searchQuery && libraryStore.loading"
+          class="absolute right-2 top-1/2 transform -translate-y-1/2 text-lime-400 animate-pulse font-mono"
         >
-          <option value="">All Genres</option>
-          <option v-for="genre in libraryStore.genres" :key="genre" :value="genre">
-            {{ genre }}
-          </option>
-        </select>
-
-        <select
-          v-model="libraryStore.filters.rating"
-          class="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+          [SEARCHING...]
+        </div>
+        <div
+          v-else-if="libraryStore.searchQuery"
+          class="absolute right-2 top-1/2 transform -translate-y-1/2 text-white font-mono"
         >
-          <option value="0">All Ratings</option>
-          <option value="7">7+ Stars</option>
-          <option value="8">8+ Stars</option>
-          <option value="9">9+ Stars</option>
-          <option value="10">10 Stars</option>
-        </select>
-
-        <select
-          v-model="libraryStore.filters.sortBy"
-          class="w-full px-4 py-2 bg-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-        >
-          <option value="title">Title</option>
-          <option value="artist">Artist</option>
-          <option value="album">Album</option>
-          <option value="rating">Rating</option>
-          <option value="play_count">Play Count</option>
-          <option value="last_played">Last Played</option>
-        </select>
+          [{{ searchResults.length }}]
+        </div>
       </div>
 
-      <div class="border-t border-gray-700 pt-4">
-        <h3 class="text-lg font-medium mb-3">Upload Music</h3>
-        <input
-          type="file"
-          accept=".mp3"
-          @change="handleFileUpload"
-          class="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-500 file:text-white hover:file:bg-purple-600"
-        />
+      <div class="mt-4 text-sm text-lime-400 font-mono">
+        <span>RESULTS: {{ searchResults.length }}</span>
+        <span class="mx-2">|</span>
+        <span>QUERY: "{{ libraryStore.searchQuery || 'NONE' }}"</span>
+      </div>
+    </div>
+
+    <!-- Search Results -->
+    <div class="border-2 border-lime-400 p-4 bg-black max-h-[500px] overflow-y-auto">
+      <div
+        v-for="song in searchResults"
+        :key="song.id"
+        class="mb-2 border border-lime-400 p-3 hover:bg-lime-400 hover:text-black transition-all cursor-pointer group"
+        @click="playSong(song)"
+      >
+        <div class="flex justify-between items-center">
+          <div class="flex-1 min-w-0">
+            <div class="font-bold mb-1 flex items-center gap-2">
+              {{ song.title }}
+              <span v-if="song.explicit" class="text-red-500 text-xs border border-red-500 px-1">
+                EXPLICIT
+              </span>
+              <span v-else-if="song.clean" class="text-blue-500 text-xs border border-blue-500 px-1">
+                CLEAN
+              </span>
+            </div>
+            <div class="text-sm opacity-80">
+              {{ song.artist }} • {{ song.album }}
+              <span v-if="song.year && song.year !== 2025">({{ song.year }})</span>
+            </div>
+            <div class="text-xs opacity-60 mt-1">
+              {{ song.genre || 'Unknown' }} | {{ formatDuration(song.duration) }} | 
+              PLAYED: {{ song.playCount || 0 }}x
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <!-- Rating -->
+            <div class="text-yellow-400 text-sm">
+              {{ '★'.repeat(Math.floor((song.rating || 0) / 2)) }}{{ '☆'.repeat(5 - Math.floor((song.rating || 0) / 2)) }}
+            </div>
+            <!-- Play Button -->
+            <button
+              @click.stop="playSong(song)"
+              class="opacity-0 group-hover:opacity-100 transition-opacity text-lime-400 hover:text-white"
+              title="Play"
+            >
+              ▶
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-if="libraryStore.searchQuery && searchResults.length === 0 && !libraryStore.loading"
+        class="text-center py-8 text-lime-400"
+      >
+        <pre class="text-xs">
+  ╔═══════════════════════════╗
+  ║   SEARCH RETURNED 0       ║
+  ║   TRY DIFFERENT QUERY     ║
+  ╚═══════════════════════════╝
+        </pre>
+      </div>
+
+      <div v-if="!libraryStore.searchQuery" class="text-center py-8 text-lime-400">
+        <pre class="text-xs">
+  ╔═══════════════════════════╗
+  ║   ENTER SEARCH QUERY      ║
+  ║   ABOVE TO BEGIN          ║
+  ╚═══════════════════════════╝
+        </pre>
+      </div>
+
+      <div v-if="libraryStore.loading" class="text-center py-8 text-lime-400 animate-pulse">
+        <pre class="text-xs">
+  ╔═══════════════════════════╗
+  ║       SEARCHING...        ║
+  ║   PLEASE WAIT             ║
+  ╚═══════════════════════════╝
+        </pre>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useLibraryStore } from '../../stores/library'
-import { debounce } from '../../utils/debounce'
+import { computed, onMounted } from 'vue';
+import { useLibraryStore } from '../../stores/library';
+import { usePlayerStore } from '../../stores/player';
+import type { Song } from '../../types';
 
-const libraryStore = useLibraryStore()
+const libraryStore = useLibraryStore();
+const playerStore = usePlayerStore();
 
-const debouncedSearch = debounce(() => {
-  libraryStore.fetchSongs()
-}, 300)
+const searchResults = computed(() => libraryStore.filteredSongs);
 
-const handleFileUpload = (event: Event) => {
-  const target = event.target as HTMLInputElement
-  if (target.files && target.files[0]) {
-    libraryStore.uploadSong(target.files[0])
-  }
-}
+// Debounced search
+let searchTimeout: NodeJS.Timeout;
+const handleSearch = () => {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    libraryStore.fetchSongs();
+  }, 500);
+};
+
+onMounted(() => {
+  libraryStore.fetchSongs();
+});
+
+const playSong = (song: Song) => {
+  playerStore.playSong(song);
+};
+
+const formatDuration = (seconds: number) => {
+  if (!seconds || seconds === 0) return '0:00';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
 </script>

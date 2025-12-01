@@ -1,25 +1,22 @@
 {
-  "permissions": {
-    "read": true,
-    "write": true,
-    "net": true,
-    "env": true
-  },
   "tasks": {
-    "dev": "nuxt dev --host localhost --port 3000",
-    "build": "nuxt build",
-    "generate": "nuxt generate",
-    "preview": "nuxt preview",
-    "clean": "deno run --allow-write --allow-read npm:@nuxt/kit@latest nuxi clean"
+    "dev": "deno run --allow-env --allow-read --allow-write --allow-net --allow-run npm:nuxt dev --host localhost --port 3000",
+    "build": "deno run --allow-env --allow-read --allow-write --allow-net --allow-run npm:nuxt build",
+    "generate": "deno run --allow-env --allow-read --allow-write --allow-net --allow-run npm:nuxt generate",
+    "preview": "deno run --allow-env --allow-read --allow-write --allow-net --allow-run npm:nuxt preview",
+    "clean": "rm -rf .nuxt .output node_modules/.cache"
   },
   "compilerOptions": {
     "lib": ["dom", "dom.iterable", "esnext"],
-    "types": ["@nuxt/types", "vite/client"]
+    "types": ["@nuxt/types", "vite/client"],
+    "strict": false,
+    "noImplicitAny": false
   },
   "imports": {
     "~/": "./",
     "@/": "./",
     "~~/": "./",
     "@@/": "./"
-  }
+  },
+  "nodeModulesDir": "auto"
 }
