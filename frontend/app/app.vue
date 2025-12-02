@@ -1,234 +1,64 @@
-<!-- app.vue -->
 <template>
-  <div class="h-screen flex flex-col bg-black text-white font-mono overflow-hidden">
-    <!-- Hidden Audio Element -->
-    <audio
-      ref="audioElement"
-      @timeupdate="handleTimeUpdate"
-      @loadedmetadata="handleLoadedMetadata"
-      @ended="handleEnded"
-      @error="handleError"
-    ></audio>
-
-    <!-- Top Menu Bar -->
-    <div class="h-12 bg-black border-b border-[#837dbd] flex items-center px-4 flex-shrink-10">
-      <div class="flex items-center gap-6 text-sm">
-        <div class="text-[#d3ceff] font-bold tracking-wide">MSX PLAYER</div>
-        <NavMenu @upload="showUploadModal = true" @change-view="changeView" />
+  <div class="min-h-screen flex flex-col bg-black text-white">
+    <div class="h-16 flex items-center px-4 border-b border-[#837dbd]">
+      <div class="flex items-center gap-6">
+        <div class="text-[#d3ceff] font-bold text-lg">MSX PLAYER</div>
+        <nav class="text-sm text-[#837dbd] font-mono">
+          <button @click="setView('library')" :class="btnClass('library')">Library</button>
+          <button @click="setView('playlists')" :class="btnClass('playlists')">Playlists</button>
+          <button @click="setView('visualizer')" :class="btnClass('visualizer')">Visualizer</button>
+        </nav>
       </div>
-      
-      <div class="ml-auto">
-        <ConnectionStatus />
+      <div class="ml-auto flex items-center gap-4">
+        <UploadModal v-if="showUpload" @close="showUpload=false" @uploaded="onUploaded" />
+        <button @click="showUpload=true" class="bg-[#837dbd] text-black px-3 py-1 rounded text-sm">Upload</button>
       </div>
     </div>
 
-    <!-- Main Layout -->
     <div class="flex flex-1 overflow-hidden">
-      <!-- Left Sidebar -->
-      <LeftSidebar
-        :current-view="currentView"
-        :playlists="libraryStore.playlists"
-        @change-view="changeView"
-        @create-playlist="showCreatePlaylistModal = true"
-        @select-playlist="selectPlaylist"
-      />
-
-      <!-- Main Content Area -->
-      <div class="flex-1 flex flex-col overflow-hidden">
-        <MainView :current-view="currentView" @play-song="handlePlaySong" />
-      </div>
-
-      <!-- Right Sidebar (Now Playing) -->
-      <RightSidebar />
+      <LeftSidebar class="w-80 border-r border-[#837dbd]" />
+      <main class="flex-1 overflow-auto">
+        <MainView :view="view" />
+      </main>
+      <RightSidebar class="w-96 border-l border-[#837dbd]" />
     </div>
 
-    <!-- Bottom Now Playing Bar -->
     <NowPlayingBar />
-
-    <!-- Upload Modal -->
-    <UploadModal v-if="showUploadModal" @close="showUploadModal = false" />
-
-    <!-- Create Playlist Modal -->
-    <CreatePlaylistModal
-      v-if="showCreatePlaylistModal"
-      @close="showCreatePlaylistModal = false"
-      @created="handlePlaylistCreated"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
-import { usePlayerStore } from '../stores/player'
-import { useLibraryStore } from '../stores/library'
-import type { Song } from '../types'
+import { ref } from 'vue'
+import LeftSidebar from '~/components/layouts/LeftSidebar.vue'
+import RightSidebar from '~/components/layouts/RightSidebar.vue'
+import MainView from '~/components/library/MainView.vue'
+import NowPlayingBar from '~/components/layouts/NowPlayingBar.vue'
+import UploadModal from '@/components/UploadModal.vue'
+import { useLibraryStore } from '@/stores/library'
 
-const playerStore = usePlayerStore()
-const libraryStore = useLibraryStore()
+const view = ref<'library' | 'playlists' | 'visualizer'>('library')
+const showUpload = ref(false)
 
-const audioElement = ref<HTMLAudioElement>()
-const currentView = ref('library')
-const showUploadModal = ref(false)
-const showCreatePlaylistModal = ref(false)
+const store = useLibraryStore()
+store.fetchSongs()
+store.fetchPlaylists()
 
-// Initialize audio element in store
-watch(audioElement, (el) => {
-  if (el) {
-    playerStore.setAudioElement(el)
-  }
-})
-
-// Audio Event Handlers
-const handleTimeUpdate = () => {
-  if (audioElement.value) {
-    playerStore.currentTime = audioElement.value.currentTime
-  }
+const setView = (v: typeof view.value) => {
+  view.value = v
+}
+const onUploaded = () => {
+  showUpload.value = false
+  store.fetchSongs()
 }
 
-const handleLoadedMetadata = () => {
-  if (audioElement.value) {
-    playerStore.duration = audioElement.value.duration
-  }
+const btnClass = (v: string) => {
+  return [
+    'px-2 py-1 rounded font-mono',
+    view.value === v ? 'bg-[#837dbd] text-black' : 'text-[#837dbd] hover:bg-[#837dbd] hover:text-black'
+  ]
 }
-
-const handleEnded = () => {
-  playerStore.handleSongEnded()
-}
-
-const handleError = (event: Event) => {
-  console.error('Audio error:', event)
-  playerStore.isPlaying = false
-}
-
-// Navigation
-const changeView = (view: string) => {
-  currentView.value = view
-}
-
-const selectPlaylist = (playlistId: number) => {
-  currentView.value = 'playlist'
-  // Store selected playlist ID for playlist view
-  libraryStore.selectedPlaylistId = playlistId
-}
-
-// Play Song Handler
-const handlePlaySong = async (song: Song) => {
-  await playerStore.playSong(song)
-}
-
-const handlePlaylistCreated = () => {
-  libraryStore.fetchPlaylists()
-  showCreatePlaylistModal.value = false
-}
-
-// Keyboard Shortcuts
-const handleKeydown = (event: KeyboardEvent) => {
-  if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
-    return
-  }
-
-  switch (event.key) {
-    case ' ':
-      event.preventDefault()
-      if (playerStore.currentSong) {
-        if (playerStore.isPlaying) {
-          playerStore.pause()
-        } else {
-          playerStore.playSong(playerStore.currentSong)
-        }
-      }
-      break
-    case 'ArrowRight':
-      event.preventDefault()
-      if (playerStore.currentSong) {
-        const newTime = Math.min(playerStore.currentTime + 10, playerStore.duration)
-        playerStore.seek(newTime)
-      }
-      break
-    case 'ArrowLeft':
-      event.preventDefault()
-      if (playerStore.currentSong) {
-        const newTime = Math.max(playerStore.currentTime - 10, 0)
-        playerStore.seek(newTime)
-      }
-      break
-    case 'ArrowUp':
-      event.preventDefault()
-      playerStore.setVolume(Math.min(playerStore.volume + 0.1, 1))
-      break
-    case 'ArrowDown':
-      event.preventDefault()
-      playerStore.setVolume(Math.max(playerStore.volume - 0.1, 0))
-      break
-    case 'n':
-    case 'N':
-      event.preventDefault()
-      playerStore.nextSong()
-      break
-    case 'p':
-    case 'P':
-      event.preventDefault()
-      playerStore.previousSong()
-      break
-  }
-}
-
-// Lifecycle
-onMounted(() => {
-  libraryStore.fetchSongs()
-  libraryStore.fetchPlaylists()
-  document.addEventListener('keydown', handleKeydown)
-})
-
-onUnmounted(() => {
-  document.removeEventListener('keydown', handleKeydown)
-})
 </script>
 
 <style>
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: #000;
-  border: 1px solid #837dbd;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #837dbd;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #d3ceff;
-}
-
-::selection {
-  background: rgba(211, 206, 255, 0.3);
-}
-
-input[type="range"] {
-  appearance: none;
-  height: 2px;
-  background: #5a548d;
-}
-
-input[type="range"]::-webkit-slider-thumb {
-  appearance: none;
-  width: 12px;
-  height: 12px;
-  background: #d3ceff;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-input[type="range"]::-moz-range-thumb {
-  width: 12px;
-  height: 12px;
-  background: #d3ceff;
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-}
+/* small global accent touches kept here */
 </style>

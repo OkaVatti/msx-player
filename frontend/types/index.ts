@@ -3,30 +3,33 @@ export interface Song {
   id: number;
   title: string;
   artist: string;
-  album: string;
-  genre: string;
-  year: number;
-  duration: number;
-  file_path: string;
+  album?: string;
+  genre?: string;
+  year?: number;
+  duration: number; // seconds
+  file_path: string; // /files/<filename>
+  file_name?: string; // internal filename
+  orig_name?: string;
   rating: number;
   play_count: number;
-  last_played: string;
-  created_at: string;
-  explicit: boolean;
-  clean: boolean;
+  last_played?: string | null;
+  created_at?: string;
+  explicit?: boolean;
+  clean?: boolean;
+  size?: number;
 }
 
 export interface Playlist {
   id: number;
   name: string;
-  description: string;
+  description?: string;
   songs: Song[];
-  created_at: string;
+  created_at?: string;
 }
 
 export interface PlayerState {
   is_playing: boolean;
-  current_song: Song | null;
+  current_song?: Song | null;
   current_time: number;
   duration: number;
   volume: number;
@@ -46,19 +49,4 @@ export interface LibraryFilters {
     | "year";
   genre: string;
   rating: number | null;
-}
-
-export interface UploadProgress {
-  id: string;
-  file: File;
-  name: string;
-  size: number;
-  status: "pending" | "uploading" | "completed" | "error";
-  progress: number;
-  error?: string;
-}
-
-export interface VisualizerMode {
-  id: "bars" | "wave" | "particles" | "circular" | "spiral" | "waveform";
-  name: string;
 }
